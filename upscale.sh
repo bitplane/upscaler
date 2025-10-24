@@ -52,14 +52,13 @@ if [ ! -d "$MODELS_DIR" ]; then
   echo "Downloading Real-ESRGAN models..."
   cd "$BINDIR"
   wget -q https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip -O models.zip
-  unzip -o -q models.zip
+  unzip -q models.zip "*/models/*"
   # The zip should contain a models directory or we need to extract it
   if [ -d "realesrgan-ncnn-vulkan/models" ]; then
     mv realesrgan-ncnn-vulkan/models .
     rm -rf realesrgan-ncnn-vulkan
   fi
   rm -f models.zip
-  chmod +x realesrgan-ncnn-vulkan 2>/dev/null || true
   cd - >/dev/null
 fi
 
