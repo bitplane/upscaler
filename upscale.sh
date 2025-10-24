@@ -72,7 +72,7 @@ ffmpeg -y -i "$FRAMES/frame_%08d.png" -vf deblock "$DEBLOCKED/frame_%08d.png"
 
 # --- step 3: upscale ---
 echo "🚀 Upscaling..."
-"$REALESRGAN" -i "$DEBLOCKED/" -o "$UPSCALED/" -n realesrgan-x4plus -s 4 -m "$MODELS_DIR"
+"$REALESRGAN" -i "$DEBLOCKED/" -o "$UPSCALED/" -n realesr-animevideov3 -s 2 -m "$MODELS_DIR"
 
 # --- step 4: reassemble ---
 echo "🎬 Reassembling..."
