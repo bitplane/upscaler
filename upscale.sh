@@ -9,10 +9,11 @@ WORKDIR="./work/${BASENAME}"
 FRAMES="${WORKDIR}/frames"
 DEBLOCKED="${WORKDIR}/deblocked"
 UPSCALED="${WORKDIR}/upscaled"
+RESTORED="${WORKDIR}/restored"
 LOGFILE="${WORKDIR}/process.log"
 BINDIR="./bin"
 
-mkdir -p "$FRAMES" "$DEBLOCKED" "$UPSCALED" "$BINDIR"
+mkdir -p "$FRAMES" "$DEBLOCKED" "$UPSCALED" "$RESTORED" "$BINDIR"
 exec > >(tee -a "$LOGFILE") 2>&1
 
 echo "== $(date) Starting pipeline for $INPUT =="
@@ -25,12 +26,10 @@ fi
 
 REALESRGAN="${BINDIR}/realesrgan-ncnn-vulkan"
 MODELS_DIR="${BINDIR}/models"
+CODEFORMER="${BINDIR}/CodeFormer"
 
 if [ ! -x "$REALESRGAN" ]; then
   echo "Building Real-ESRGAN from source..."
-  echo "NOTE: Requires git, cmake, build-essential, libvulkan1, vulkan-tools, libopencv-dev"
-  echo "      Please install with: sudo apt update && sudo apt install -y git cmake build-essential libvulkan1 vulkan-tools libopencv-dev"
-
   cd "$BINDIR"
   rm -rf Real-ESRGAN-ncnn-vulkan
 
@@ -62,6 +61,22 @@ if [ ! -d "$MODELS_DIR" ]; then
   cd - >/dev/null
 fi
 
+# Setup CodeFormer if missing
+if [ ! -d "$CODEFORMER" ]; then
+  echo "Setting up CodeFormer..."
+  cd "$BINDIR"
+  git clone --depth=1 https://github.com/sczhou/CodeFormer.git
+  cd CodeFormer
+  python3 -m venv venv
+  source venv/bin/activate
+  pip install -r requirements.txt -q
+  python basicsr/setup.py develop
+  python scripts/download_pretrained_models.py facelib
+  python scripts/download_pretrained_models.py CodeFormer
+  deactivate
+  cd - >/dev/null
+fi
+
 # --- step 1: extract frames ---
 echo "🎞️ Extracting frames..."
 ffmpeg -y -i "$INPUT" -qscale:v 2 "$FRAMES/frame_%08d.png"
@@ -70,15 +85,45 @@ ffmpeg -y -i "$INPUT" -qscale:v 2 "$FRAMES/frame_%08d.png"
 echo "🧽 Deblocking..."
 ffmpeg -y -i "$FRAMES/frame_%08d.png" -vf deblock "$DEBLOCKED/frame_%08d.png"
 
+# Save deblocked comparison video
+echo "💾 Saving deblocked comparison..."
+FPS=$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of csv=p=0 "$INPUT")
+ffmpeg -y -framerate "$FPS" -i "$DEBLOCKED/frame_%08d.png" -i "$INPUT" \
+  -map 0:v -map 1:a? -c:v libx264 -pix_fmt yuv420p -c:a copy "${WORKDIR}/01_deblocked.mp4"
+
 # --- step 3: upscale ---
 echo "🚀 Upscaling..."
 "$REALESRGAN" -i "$DEBLOCKED/" -o "$UPSCALED/" -n realesr-animevideov3 -s 2 -m "$MODELS_DIR"
 
-# --- step 4: reassemble ---
-echo "🎬 Reassembling..."
-FPS=$(ffprobe -v error -select_streams v:0 -show_entries stream=r_frame_rate -of csv=p=0 "$INPUT")
+# Save upscaled comparison video
+echo "💾 Saving upscaled comparison..."
 ffmpeg -y -framerate "$FPS" -i "$UPSCALED/frame_%08d.png" -i "$INPUT" \
+  -map 0:v -map 1:a? -c:v libx264 -pix_fmt yuv420p -c:a copy "${WORKDIR}/02_upscaled.mp4"
+
+# --- step 4: face restoration ---
+echo "👤 Restoring faces..."
+cd "$CODEFORMER"
+source venv/bin/activate
+python inference_codeformer.py -w 0.7 --input_path "../../${UPSCALED}" --output_path "../../${RESTORED}/final_results"
+deactivate
+cd - >/dev/null
+
+# Copy restored frames to main restored directory
+cp "$RESTORED"/final_results/*.png "$RESTORED/" 2>/dev/null || true
+
+# Save restored comparison video
+echo "💾 Saving restored comparison..."
+ffmpeg -y -framerate "$FPS" -i "$RESTORED/frame_%08d.png" -i "$INPUT" \
+  -map 0:v -map 1:a? -c:v libx264 -pix_fmt yuv420p -c:a copy "${WORKDIR}/03_restored.mp4"
+
+# --- step 5: reassemble final output ---
+echo "🎬 Reassembling final output..."
+ffmpeg -y -framerate "$FPS" -i "$RESTORED/frame_%08d.png" -i "$INPUT" \
   -map 0:v -map 1:a? -c:v libx264 -pix_fmt yuv420p -c:a copy "$OUTPUT"
 
 echo "== $(date) Done. Output: $OUTPUT =="
+echo "Comparison videos saved in $WORKDIR:"
+echo "  - 01_deblocked.mp4"
+echo "  - 02_upscaled.mp4"
+echo "  - 03_restored.mp4"
 
