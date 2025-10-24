@@ -24,6 +24,8 @@ if ! command -v ffmpeg >/dev/null; then
 fi
 
 REALESRGAN="${BINDIR}/realesrgan-ncnn-vulkan"
+MODELS_DIR="${BINDIR}/models"
+
 if [ ! -x "$REALESRGAN" ]; then
   echo "Building Real-ESRGAN from source..."
   echo "NOTE: Requires git, cmake, build-essential, libvulkan1, vulkan-tools, libopencv-dev"
@@ -45,6 +47,21 @@ if [ ! -x "$REALESRGAN" ]; then
   cd - >/dev/null
 fi
 
+# Download models if missing
+if [ ! -d "$MODELS_DIR" ]; then
+  echo "Downloading Real-ESRGAN models..."
+  cd "$BINDIR"
+  wget -q https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip -O models.zip
+  unzip -q models.zip
+  # The zip should contain a models directory or we need to extract it
+  if [ -d "realesrgan-ncnn-vulkan/models" ]; then
+    mv realesrgan-ncnn-vulkan/models .
+    rm -rf realesrgan-ncnn-vulkan
+  fi
+  rm -f models.zip
+  cd - >/dev/null
+fi
+
 # --- step 1: extract frames ---
 echo "🎞️ Extracting frames..."
 ffmpeg -y -i "$INPUT" -qscale:v 2 "$FRAMES/frame_%08d.png"
@@ -55,7 +72,7 @@ ffmpeg -y -i "$FRAMES/frame_%08d.png" -vf deblock "$DEBLOCKED/frame_%08d.png"
 
 # --- step 3: upscale ---
 echo "🚀 Upscaling..."
-"$REALESRGAN" -i "$DEBLOCKED/" -o "$UPSCALED/" -n realesrgan-x2plus
+"$REALESRGAN" -i "$DEBLOCKED/" -o "$UPSCALED/" -n realesrgan-x2plus -m "$MODELS_DIR"
 
 # --- step 4: reassemble ---
 echo "🎬 Reassembling..."
