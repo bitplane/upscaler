@@ -25,11 +25,22 @@ fi
 
 REALESRGAN="${BINDIR}/realesrgan-ncnn-vulkan"
 if [ ! -x "$REALESRGAN" ]; then
-  echo "Downloading Real-ESRGAN..."
+  echo "Building Real-ESRGAN from source..."
+  echo "NOTE: Requires git, cmake, build-essential, libvulkan1, vulkan-tools, libopencv-dev"
+  echo "      Please install with: sudo apt update && sudo apt install -y git cmake build-essential libvulkan1 vulkan-tools libopencv-dev"
+
   cd "$BINDIR"
-  wget -q https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip -O realesrgan.zip
-  unzip -q realesrgan.zip
-  rm realesrgan.zip
+  rm -rf Real-ESRGAN-ncnn-vulkan
+
+  git clone --depth=1 https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan.git
+  cd Real-ESRGAN-ncnn-vulkan
+  git submodule update --init --recursive
+  cd src
+  mkdir -p build && cd build
+  cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 ..
+  make -j"$(nproc)"
+  cp realesrgan-ncnn-vulkan ../../../realesrgan-ncnn-vulkan
+  cd ../../../
   chmod +x realesrgan-ncnn-vulkan
   cd - >/dev/null
 fi
