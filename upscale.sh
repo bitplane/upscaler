@@ -70,7 +70,7 @@ if [ ! -d "$CODEFORMER" ]; then
   python3 -m venv venv
   source venv/bin/activate
   pip install -r requirements.txt -q
-  python basicsr/setup.py develop
+  pip install basicsr -q
   python scripts/download_pretrained_models.py facelib
   python scripts/download_pretrained_models.py CodeFormer
   deactivate
@@ -104,21 +104,21 @@ ffmpeg -y -framerate "$FPS" -i "$UPSCALED/frame_%08d.png" -i "$INPUT" \
 echo "👤 Restoring faces..."
 cd "$CODEFORMER"
 source venv/bin/activate
-python inference_codeformer.py -w 0.7 --input_path "../../${UPSCALED}" --output_path "../../${RESTORED}/final_results"
+python inference_codeformer.py -w 0.7 --input_path "../../${UPSCALED}" --output_path "../../${RESTORED}"
 deactivate
 cd - >/dev/null
 
-# Copy restored frames to main restored directory
-cp "$RESTORED"/final_results/*.png "$RESTORED/" 2>/dev/null || true
+# CodeFormer outputs to final_results/final_results/
+RESTORED_FRAMES="$RESTORED/final_results"
 
 # Save restored comparison video
 echo "💾 Saving restored comparison..."
-ffmpeg -y -framerate "$FPS" -i "$RESTORED/frame_%08d.png" -i "$INPUT" \
+ffmpeg -y -framerate "$FPS" -i "$RESTORED_FRAMES/frame_%08d.png" -i "$INPUT" \
   -map 0:v -map 1:a? -c:v libx264 -pix_fmt yuv420p -c:a copy "${WORKDIR}/03_restored.mp4"
 
 # --- step 5: reassemble final output ---
 echo "🎬 Reassembling final output..."
-ffmpeg -y -framerate "$FPS" -i "$RESTORED/frame_%08d.png" -i "$INPUT" \
+ffmpeg -y -framerate "$FPS" -i "$RESTORED_FRAMES/frame_%08d.png" -i "$INPUT" \
   -map 0:v -map 1:a? -c:v libx264 -pix_fmt yuv420p -c:a copy "$OUTPUT"
 
 echo "== $(date) Done. Output: $OUTPUT =="
