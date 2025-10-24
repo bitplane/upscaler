@@ -26,6 +26,8 @@ sudo apt update && sudo apt install -y \
 The script automatically downloads/builds:
 - Real-ESRGAN-ncnn-vulkan (compiled from source)
 - Real-ESRGAN models (2x/3x/4x anime and general models)
+- Real-CUGAN-ncnn-vulkan (compiled from source)
+- Real-CUGAN models (optimized for compressed/degraded video)
 - CodeFormer (with dedicated venv for face restoration)
 
 ## Usage
@@ -38,7 +40,7 @@ The script automatically downloads/builds:
 
 1. **Extract frames** - Decode video to PNG frames
 2. **Deblock** - Remove compression artifacts with ffmpeg deblock filter
-3. **Upscale** - 2x AI upscaling using Real-ESRGAN anime model
+3. **Upscale** - 2x AI upscaling using Real-CUGAN (denoise level 3)
 4. **Face restoration** - Restore faces using CodeFormer (w=0.7)
 5. **Reassemble** - Encode back to video with original audio
 
@@ -53,6 +55,6 @@ The script automatically downloads/builds:
 ## Configuration
 
 Edit `upscale.sh` to adjust:
-- Upscaling model (`-n` parameter, line 97)
-- Upscale factor (`-s` parameter, line 97)
-- Face restoration fidelity (`-w` parameter, line 111, range 0-1)
+- Denoise level (`-n` parameter, line 133: -1/0/1/2/3, higher = more denoising)
+- Upscale factor (`-s` parameter, line 133: 2/3/4)
+- Face restoration fidelity (`-w` parameter, line 143: 0-1, higher = more faithful to original)

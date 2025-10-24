@@ -25,7 +25,9 @@ if ! command -v ffmpeg >/dev/null; then
 fi
 
 REALESRGAN="${BINDIR}/realesrgan-ncnn-vulkan"
+REALCUGAN="${BINDIR}/realcugan-ncnn-vulkan/realcugan-ncnn-vulkan"
 MODELS_DIR="${BINDIR}/models"
+CUGAN_MODELS_DIR="${BINDIR}/realcugan-models"
 CODEFORMER="${BINDIR}/CodeFormer"
 
 if [ ! -x "$REALESRGAN" ]; then
@@ -46,7 +48,7 @@ if [ ! -x "$REALESRGAN" ]; then
   cd - >/dev/null
 fi
 
-# Download models if missing
+# Download Real-ESRGAN models if missing
 if [ ! -d "$MODELS_DIR" ]; then
   echo "Downloading Real-ESRGAN models..."
   cd "$BINDIR"
@@ -59,6 +61,41 @@ if [ ! -d "$MODELS_DIR" ]; then
   fi
   rm -f models.zip
   cd - >/dev/null
+fi
+
+# Build Real-CUGAN if missing
+if [ ! -x "$REALCUGAN" ]; then
+  echo "Building Real-CUGAN from source..."
+  cd "$BINDIR"
+  rm -rf realcugan-ncnn-vulkan
+
+  git clone --depth=1 https://github.com/nihui/realcugan-ncnn-vulkan.git
+  cd realcugan-ncnn-vulkan
+  git submodule update --init --recursive
+  mkdir -p build && cd build
+  cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_POLICY_VERSION_MINIMUM=3.5 ../src
+  make -j"$(nproc)"
+  cp realcugan-ncnn-vulkan ../../realcugan-ncnn-vulkan
+  cd ../../
+  chmod +x realcugan-ncnn-vulkan
+  cd - >/dev/null
+fi
+
+# Download Real-CUGAN models if missing
+if [ ! -d "$CUGAN_MODELS_DIR" ]; then
+  echo "Downloading Real-CUGAN models..."
+  ORIGINAL_DIR="$(pwd)"
+  cd "$BINDIR"
+  wget -q https://github.com/nihui/realcugan-ncnn-vulkan/releases/download/20220728/realcugan-ncnn-vulkan-20220728-ubuntu.zip -O cugan.zip
+  unzip -q cugan.zip "*/models-*"
+  # Extract all model directories
+  if [ -d "realcugan-ncnn-vulkan-20220728-ubuntu" ]; then
+    mkdir -p realcugan-models
+    mv realcugan-ncnn-vulkan-20220728-ubuntu/models-* realcugan-models/
+    rm -rf realcugan-ncnn-vulkan-20220728-ubuntu
+  fi
+  rm -f cugan.zip
+  cd "$ORIGINAL_DIR"
 fi
 
 # Setup CodeFormer if missing
@@ -92,8 +129,8 @@ ffmpeg -y -framerate "$FPS" -i "$DEBLOCKED/frame_%08d.png" -i "$INPUT" \
   -map 0:v -map 1:a? -c:v libx264 -pix_fmt yuv420p -c:a copy "${WORKDIR}/01_deblocked.mp4"
 
 # --- step 3: upscale ---
-echo "🚀 Upscaling..."
-"$REALESRGAN" -i "$DEBLOCKED/" -o "$UPSCALED/" -n realesr-animevideov3 -s 2 -m "$MODELS_DIR"
+echo "🚀 Upscaling with Real-CUGAN..."
+"$REALCUGAN" -i "$DEBLOCKED/" -o "$UPSCALED/" -n 3 -s 2 -m "${CUGAN_MODELS_DIR}/models-pro"
 
 # Save upscaled comparison video
 echo "💾 Saving upscaled comparison..."
